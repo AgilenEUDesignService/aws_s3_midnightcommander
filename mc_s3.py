@@ -22,8 +22,8 @@ def list_local_dir(path):
     with os.scandir(path) as it:
         for e in it:
             try:
-                is_dir = e.is_dir(follow_symlinks=False)
-                st = e.stat(follow_symlinks=False)
+                is_dir = e.is_dir(follow_symlinks=True)
+                st = e.stat(follow_symlinks=True)
                 entries.append({
                     "name": e.name,
                     "is_dir": is_dir,
@@ -89,6 +89,10 @@ class DualPaneS3(tk.Tk):
 
         # SSO runtime state
         self._sso_state = None  # dict with: session, expiration_ms, account_id, role_name, sso_region
+
+        #Enable S3-validated checksums
+        self.checksum_algo ="SHA256"
+
 
         self._build_ui()
         self._bind_keys()
@@ -552,7 +556,10 @@ class DualPaneS3(tk.Tk):
                             full = os.path.join(root, f)
                             rel = os.path.relpath(full, local_path).replace("\\","/")
                             key = (target + rel) if target.endswith("/") else (target + "/" + rel if target else rel)
-                            client.upload_file(full, bucket, key)
+                            extra_args={}
+                            if self.checksum_algo:
+                                extra_Args["ChecksumAlgorithm"]=self.checksum_algo
+                            client.upload_file(full, bucket, key,ExtraArgs=extra_args)
                     self.set_status("Folder upload complete.")
                     self.refresh_s3()
                 except Exception as e:
@@ -566,17 +573,27 @@ class DualPaneS3(tk.Tk):
         if not key:
             return
 
+        # PATCHED below
+
         def _upload():
             try:
                 self.set_status(f"Uploading {os.path.basename(local_path)} → s3://{bucket}/{key}")
                 client = self._get_s3_client()
-                client.upload_file(local_path, bucket, key)
+
+                extra_args = {}
+                if self.checksum_algo:
+                    extra_args["ChecksumAlgorithm"] = self.checksum_algo  # Option A: backend-validated checksum
+                print("Extra arguments:",extra_args)
+
+                client.upload_file(local_path, bucket, key, ExtraArgs=extra_args)
+
                 self.set_status("Upload complete.")
                 self.refresh_s3()
             except Exception as e:
                 messagebox.showerror("Upload Error", str(e))
                 self.set_status("Upload failed.")
         threading.Thread(target=_upload, daemon=True).start()
+
 
     def download_from_s3(self):
         typ, sel = self.get_selected_s3()
