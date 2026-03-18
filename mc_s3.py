@@ -12,6 +12,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from boto3.s3.transfer import TransferConfig # parallel downloads
 
 from transfer_manager_addon import TransferManager
+from config_manager_addon import ConfigManager
 
 # ---------- AWS session helper ----------
 def make_session(profile_name=None, region_name=None):
@@ -87,6 +88,9 @@ class DualPaneS3(tk.Tk):
     def __init__(self):
         super().__init__()
 
+
+        self.config = ConfigManager()
+
         # --- Aply clam theme ---
         style = ttk.Style()
         style.theme_use("clam")
@@ -134,12 +138,32 @@ class DualPaneS3(tk.Tk):
         self._bind_keys()
         self.transfer_manager = TransferManager(self)
 
+        # Restore config values
+        self.profile_var.set(self.config.get("profile"))
+        self.region_var.set(self.config.get("region"))
+        self.bucket_var.set(self.config.get("bucket"))
+        self.prefix_var.set(self.config.get("prefix"))
+        self.local_path_var.set(self.config.get("local_path"))
+        self.transfer_mode_var.set(self.config.get("transfer_mode"))
+        self.sso_start_url_var.set(self.config.get("sso_start_url"))
+        self.sso_region_var.set(self.config.get("sso_region"))
+        
+        # Restore window geometry
+        geom = self.config.get("geometry")
+        if geom:
+            try:
+                self.geometry(geom)
+            except:
+                pass
+
+
         # Set transferconfig
         self.transfer_mode_var = tk.StringVar(value="High-Speed")
         self.update_transfer_config()
 
         # init state
-        self.local_path_var.set(os.path.expanduser("~"))
+        #self.local_path_var.set(os.path.expanduser("~"))
+        self.local_path_var.set(self.config.get("local_path"))
         self.refresh_local()
 
     # ---------- UI ----------
@@ -150,12 +174,17 @@ class DualPaneS3(tk.Tk):
 
         self.profile_var = tk.StringVar()
         self.region_var = tk.StringVar()
+        self.region_var.trace_add("write", lambda *args:
+                                  self.config.set("region", self.region_var.get()))
         self.recursive_var = tk.BooleanVar(value=True)
 
         ttk.Label(toolbar, text="AWS Profile:").pack(side=tk.LEFT, padx=(0,4))
         self.profile_cb = ttk.Combobox(toolbar, textvariable=self.profile_var, width=16)
         self.profile_cb["values"] = self._detect_profiles()
         self.profile_cb.pack(side=tk.LEFT, padx=(0,10))
+        self.profile_cb.bind("<<ComboboxSelected>>", lambda e:
+                             self.config.set("profile",self.profile_var.get()))
+
 
         ttk.Label(toolbar, text="Region:").pack(side=tk.LEFT, padx=(0,4))
         ttk.Entry(toolbar, textvariable=self.region_var, width=14).pack(side=tk.LEFT, padx=(0,10))
@@ -168,9 +197,13 @@ class DualPaneS3(tk.Tk):
         ttk.Label(toolbar, text="SSO Start URL:").pack(side=tk.LEFT, padx=(0,4))
         self.sso_start_url_var = tk.StringVar()
         ttk.Entry(toolbar, textvariable=self.sso_start_url_var, width=28).pack(side=tk.LEFT, padx=(0,10))
+        self.sso_start_url_var.trace_add("write", lambda *a:
+                                         self.config.set("sso_start_url",self.sso_start_url_var.get()))
         ttk.Label(toolbar, text="SSO Region:").pack(side=tk.LEFT, padx=(0,4))
         self.sso_region_var = tk.StringVar()
         ttk.Entry(toolbar, textvariable=self.sso_region_var, width=14).pack(side=tk.LEFT, padx=(0,10))
+        self.sso_region_var.trace_add("write", lambda *a:
+                                      self.config.set("sso_region",self.sso_region_var.get()))
         ttk.Button(toolbar, text="SSO Login & Select Role", command=self.sso_login_and_select).pack(side=tk.LEFT)
 
         # --- Transfer Mode Selection ---
@@ -230,11 +263,15 @@ class DualPaneS3(tk.Tk):
         self.bucket_var = tk.StringVar()
         self.bucket_cb = ttk.Combobox(s3_top, textvariable=self.bucket_var, width=40)
         self.bucket_cb.pack(side=tk.LEFT, padx=(6,10))
+        self.bucket_cb.bind("<<ComboboxSelected>>", lambda e:
+                            self.config.set("bucket", self.bucket_var.get()))
         ttk.Button(s3_top, text="Open", command=self.refresh_s3).pack(side=tk.LEFT, padx=(0,6))
 
         ttk.Label(s3_top, text="Prefix:").pack(side=tk.LEFT)
         self.prefix_var = tk.StringVar()
         ttk.Entry(s3_top, textvariable=self.prefix_var, width=40).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6,0))
+        self.prefix_var.trace_add("write", lambda *a:
+                                  self.config.set("prefix",self.prefix_var.get()))
         ttk.Button(s3_top, text="Up", command=self.s3_up).pack(side=tk.LEFT, padx=(6,0))
 
         self.s3_tree = ttk.Treeview(right, columns=("key","size_mb","last_modified"), show="headings", selectmode="browse")
@@ -335,6 +372,13 @@ class DualPaneS3(tk.Tk):
                     )
         self.transfer_config = cfg
         self.set_status(f"Transfer mode set to:{mode}")
+
+    def on_close(self):
+        try:
+            self.config.set("geometry",self.geometry())
+        except:
+            pass
+        self.destroy()
 
 
 
@@ -534,6 +578,7 @@ class DualPaneS3(tk.Tk):
         path = filedialog.askdirectory(initialdir=self.local_path_var.get())
         if path:
             self.local_path_var.set(path)
+            self.config.set("local_path",path)
             self.refresh_local()
 
     def refresh_local(self):
@@ -564,12 +609,14 @@ class DualPaneS3(tk.Tk):
             return
         if item == "__PARENT__":
             self.local_path_var.set(os.path.dirname(self.local_path_var.get().rstrip(os.sep)))
+            self.config.set("local_path",self.local_path_var.get())
             self.refresh_local()
             return
         name = item
         full = os.path.join(self.local_path_var.get(), name)
         if os.path.isdir(full):
             self.local_path_var.set(full)
+            self.config.set("local_path",full)
             self.refresh_local()
 
     def get_selected_local_path(self):
@@ -944,4 +991,5 @@ class DualPaneS3(tk.Tk):
 
 if __name__ == "__main__":
     app = DualPaneS3()
+    app.protocol("WM_DELETE_WINDOW",app.on_close)
     app.mainloop()
