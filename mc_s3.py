@@ -92,6 +92,7 @@ class DualPaneS3(tk.Tk):
 
         #Enable S3-validated checksums
         self.checksum_algo ="SHA256"
+        #self.checksum_algo ="CRC64_NVME"
 
 
         self._build_ui()
@@ -244,13 +245,17 @@ class DualPaneS3(tk.Tk):
                 code = device.get("userCode")
                 expires_in = int(device["expiresIn"])
                 interval = int(device["interval"]) if "interval" in device else 5
+                #DEBUG
+                print(f"Device,{device}")
+                self.set_status(f"Device code: {code}")
+                #TODO -> Here have a popup window showing the device code!
 
                 # Open browser
                 try:
                     webbrowser.open(url)
                 except Exception:
                     pass
-                self.set_status("Please complete SSO in your browser…")
+                self.set_status(f"Please complete SSO in your browser Device Code:{code}")
 
                 # Poll for token
                 access_token = None
@@ -277,6 +282,10 @@ class DualPaneS3(tk.Tk):
 
                 if not access_token:
                     raise RuntimeError("SSO login not completed before expiration.")
+                #DEBUG
+                print("==================")
+                print(f"TOK access token {tok}")
+                print("-------------")
 
                 # List accounts and choose
                 sso = boto3.client("sso", region_name=sso_region)
@@ -304,6 +313,10 @@ class DualPaneS3(tk.Tk):
                 idx = nice_accounts.index(dlg.result)
                 account = accounts[idx]
                 account_id = account["accountId"]
+                #DEBUG
+                print("==============")
+                print(f"Account: {account}")
+                print("--------------")
 
                 # List roles for account
                 roles = []
@@ -334,6 +347,9 @@ class DualPaneS3(tk.Tk):
                     roleName=role_name,
                     accessToken=access_token,
                 )["roleCredentials"]
+                #DEBUG
+                print("==========")
+                print(f"Role Credentials {creds}")
 
                 region = (self.region_var.get() or '').strip() or sso_region
                 session = boto3.Session(
@@ -352,6 +368,7 @@ class DualPaneS3(tk.Tk):
                 }
                 exp = datetime.fromtimestamp(creds["expiration"]/1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
                 self.set_status(f"SSO session established (expires {exp}).")
+                #TODO add this to a log visible
             except Exception as e:
                 messagebox.showerror("SSO Error", str(e))
                 self.set_status("SSO failed.")
@@ -451,6 +468,11 @@ class DualPaneS3(tk.Tk):
                 self.set_status("Loading buckets…")
                 client = self._get_s3_client()
                 resp = client.list_buckets()
+                #DEBUG
+                print("=========")
+                print(f"Response list buckets:")
+                print(f"{resp}")
+                print("---------")
                 names = sorted([b["Name"] for b in resp.get("Buckets", [])])
                 self.bucket_cb["values"] = names
                 if names and not self.bucket_var.get():
@@ -602,19 +624,27 @@ class DualPaneS3(tk.Tk):
             return
         if typ == "prefix":
             local_dir = filedialog.askdirectory(initialdir=self.local_path_var.get(), title="Download to directory")
+            #local_dir =self.local_path_var.get() # Download directly to left pane
             if not local_dir:
                 return
             bucket = self.bucket_var.get().strip()
             prefix = sel
             def _dl_prefix():
+                #TODO fix here!!!!! it doesn't download folders properly
                 try:
                     self.set_status(f"Downloading s3://{bucket}/{prefix} → {local_dir}")
                     client = self._get_s3_client()
                     paginator = client.get_paginator("list_objects_v2")
                     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
                         for obj in page.get("Contents", []):
+                            #DEBUG
+                            print(f"Object in prefix: {obj}")
+                            print(f"prefix {prefix}")
                             key = obj["Key"]
                             rel = key[len(prefix):] if key.startswith(prefix) else key
+                            print(f"LEft rel: {rel}")
+                            rel="test" #DEBUG
+                            print(f"LEft rel: {rel}")
                             dest = os.path.join(local_dir, rel)
                             os.makedirs(os.path.dirname(dest), exist_ok=True)
                             client.download_file(bucket, key, dest)
@@ -629,6 +659,10 @@ class DualPaneS3(tk.Tk):
             key = sel
             save_as = filedialog.asksaveasfilename(initialdir=self.local_path_var.get(),
                                                    initialfile=os.path.basename(key))
+            #DEBUG
+            print("==========")
+            print(f"save_as: {save_as}")
+            print("----------")
             if not save_as:
                 return
             def _dl():
