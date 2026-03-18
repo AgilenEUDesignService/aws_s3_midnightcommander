@@ -32,7 +32,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 
 ## 🎨 UI/UX Enhancements
 
-### 1. Modern ttk Theme
+### [X] 1. Modern ttk Theme
 - Apply clam or a custom theme.
 
 ### 2. Improve Keyboard Shortcuts

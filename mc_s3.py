@@ -83,6 +83,30 @@ class SelectionDialog(tk.Toplevel):
 class DualPaneS3(tk.Tk):
     def __init__(self):
         super().__init__()
+
+        # --- Aply clam theme ---
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure('TreeView',
+                        background="#f5f5f5",
+                        foreground="black",
+                        fieldbackground="#f5f5f5",
+                        rowheight=22)
+        style.configure("Treeview.Heading",
+                        background="#dddddd",
+                        foreground="black")
+        style.map('Treeview',
+                  background=[('selected', '#0078d4')],
+                  foreground=[('selected', 'white')])
+
+        style.configure('TButton',padding=4)
+        style.configure('TLabel', padding=2)
+        style.configure('TEntry', padding=2)
+
+
+
+
         self.title("Midnight Commander–style S3 Manager (Pure boto3 SSO)")
         self.geometry("1280x720")
         self.minsize(980, 600)
