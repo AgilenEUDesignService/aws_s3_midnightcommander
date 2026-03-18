@@ -49,7 +49,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 
 ## 🚀 AWS Functional Improvements
 
-### 1. Fix Folder Download Logic
+### [X] 1. Fix Folder Download Logic
 - Remove debug placeholder.
 - Correct relative path reconstruction.
 
