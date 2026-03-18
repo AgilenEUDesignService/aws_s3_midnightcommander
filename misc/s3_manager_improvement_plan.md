@@ -10,6 +10,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 ### [X] 1. Parallel Transfer Manager
 - Use boto3 TransferConfig for multi-threaded uploads/downloads.
 - Faster performance for large files.
+- Add a transfer mode manager to UI
 
 ### 2. File Transfer Progress Bars
 - Implement progress callbacks.

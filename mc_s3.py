@@ -120,16 +120,20 @@ class DualPaneS3(tk.Tk):
         #self.checksum_algo ="CRC64_NVME"
 
         #Large transfer config
-        self.transfer_config = TransferConfig(
-                multipart_threshold = 8 * 1024 * 1024 , # 8 MB
-                max_concurrency = 8 ,                   # 8 paralles threads
-                multipart_chunksize = 8 * 1024 * 1024,  # * MB chunks
-                use_threads=True
-                )
+        #self.transfer_config = TransferConfig(
+        #        multipart_threshold = 8 * 1024 * 1024 , # 8 MB
+        #        max_concurrency = 8 ,                   # 8 paralles threads
+        #        multipart_chunksize = 8 * 1024 * 1024,  # * MB chunks
+        #        use_threads=True
+        #        )
 
 
         self._build_ui()
         self._bind_keys()
+
+        # Set transferconfig
+        self.transfer_mode_var = tk.StringVar(value="High-Speed")
+        self.update_transfer_config()
 
         # init state
         self.local_path_var.set(os.path.expanduser("~"))
@@ -165,6 +169,25 @@ class DualPaneS3(tk.Tk):
         self.sso_region_var = tk.StringVar()
         ttk.Entry(toolbar, textvariable=self.sso_region_var, width=14).pack(side=tk.LEFT, padx=(0,10))
         ttk.Button(toolbar, text="SSO Login & Select Role", command=self.sso_login_and_select).pack(side=tk.LEFT)
+
+        # --- Transfer Mode Selection ---
+        ttk.Label(toolbar, text = "Transfer Mode:").pack(side=tk.LEFT,padx=(12,4))
+
+        self.transfer_mode_var= tk.StringVar(value="High-Speed")
+        self.transfer_mode_cb = ttk.Combobox(
+                toolbar,
+                textvariable=self.transfer_mode_var,
+                values = ["Balanced", "High-Speed", "Low-Resource"],
+                width=14,
+                state="readonly"
+                )
+        self.transfer_mode_cb.pack(side=tk.LEFT,padx=(0,10))
+
+        self.transfer_mode_cb.set(self.transfer_mode_var.get())
+
+        # Update config when changed
+        self.transfer_mode_cb.bind("<<ComboboxSelected>>", lambda e: self.update_transfer_config())
+
 
         # Panes
         panes = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
@@ -281,6 +304,35 @@ class DualPaneS3(tk.Tk):
             rel = last + "/"   # ensure folder is created
 
         return rel
+
+    def update_transfer_config(self):
+        """
+        Updates self.transfer_config according to the selected mode.
+        """
+        mode = self.transfer_mode_var.get()
+
+        if mode == "Balanced":
+            cfg = TransferConfig(
+                    multipart_threshold= 8 * 1024 * 1024,
+                    max_concurrency=8,
+                    multipart_chunksize=8 * 1024 * 1024,
+                    use_threads=True
+                    )
+        elif mode == "High-Speed":
+            cfg = TransferConfig(
+                    multipart_threshold= 16 * 1024 * 1024,
+                    max_concurrency=16,
+                    multipart_chunksize=16 * 1024 * 1024,
+                    use_threads=True
+                    )
+        else:
+            # Fallback safest choice
+            cfg = TransferConfig(
+                    use_threads=True
+                    )
+        self.transfer_config = cfg
+        self.set_status(f"Transfer mode set to:{mode}")
+
 
 
     # ---------- SSO (pure boto) ----------
