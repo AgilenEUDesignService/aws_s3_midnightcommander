@@ -9,6 +9,7 @@ import shutil
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from boto3.s3.transfer import TransferConfig # parallel downloads
 
 # ---------- AWS session helper ----------
 def make_session(profile_name=None, region_name=None):
@@ -117,6 +118,14 @@ class DualPaneS3(tk.Tk):
         #Enable S3-validated checksums
         self.checksum_algo ="SHA256"
         #self.checksum_algo ="CRC64_NVME"
+
+        #Large transfer config
+        self.transfer_config = TransferConfig(
+                multipart_threshold = 8 * 1024 * 1024 , # 8 MB
+                max_concurrency = 8 ,                   # 8 paralles threads
+                multipart_chunksize = 8 * 1024 * 1024,  # * MB chunks
+                use_threads=True
+                )
 
 
         self._build_ui()
@@ -634,7 +643,7 @@ class DualPaneS3(tk.Tk):
                             extra_args={}
                             if self.checksum_algo:
                                 extra_Args["ChecksumAlgorithm"]=self.checksum_algo
-                            client.upload_file(full, bucket, key,ExtraArgs=extra_args)
+                            client.upload_file(full, bucket, key,ExtraArgs=extra_args, Config=self.transfer_config)
                     self.set_status("Folder upload complete.")
                     self.refresh_s3()
                 except Exception as e:
@@ -660,7 +669,7 @@ class DualPaneS3(tk.Tk):
                     extra_args["ChecksumAlgorithm"] = self.checksum_algo  # Option A: backend-validated checksum
                 print("Extra arguments:",extra_args)
 
-                client.upload_file(local_path, bucket, key, ExtraArgs=extra_args)
+                client.upload_file(local_path, bucket, key, ExtraArgs=extra_args, Config=self.transfer_config)
 
                 self.set_status("Upload complete.")
                 self.refresh_s3()
@@ -729,7 +738,7 @@ class DualPaneS3(tk.Tk):
                             dest = os.path.join(local_dir, rel)
                             os.makedirs(os.path.dirname(dest), exist_ok=True)
                             if not key.endswith("/"):
-                                client.download_file(bucket, key, dest) #download files skip directories
+                                client.download_file(bucket, key, dest,Config=self.transfer_config) #download files skip directories
                     self.set_status("Download complete.")
                     self.refresh_local()
                 except Exception as e:
@@ -753,7 +762,7 @@ class DualPaneS3(tk.Tk):
                     self.set_status(f"Downloading s3://{bucket}/{key} → {save_as}")
                     client = self._get_s3_client()
                     os.makedirs(os.path.dirname(save_as), exist_ok=True)
-                    client.download_file(bucket, key, save_as)
+                    client.download_file(bucket, key, save_as, Config=self.transfer_config)
                     self.set_status("Download complete.")
                     self.refresh_local()
                 except Exception as e:

@@ -7,7 +7,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 
 ## ✅ High‑Impact Feature Upgrades
 
-### 1. Parallel Transfer Manager
+### [X] 1. Parallel Transfer Manager
 - Use boto3 TransferConfig for multi-threaded uploads/downloads.
 - Faster performance for large files.
 
