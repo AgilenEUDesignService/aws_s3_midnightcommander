@@ -12,7 +12,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 - Faster performance for large files.
 - Add a transfer mode manager to UI
 
-### 2. File Transfer Progress Bars
+### [X] 2. File Transfer Progress Bars
 - Implement progress callbacks.
 - Show MB/s, ETA, percentage.
 

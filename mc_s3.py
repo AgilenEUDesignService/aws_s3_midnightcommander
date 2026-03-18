@@ -11,6 +11,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from boto3.s3.transfer import TransferConfig # parallel downloads
 
+from transfer_manager_addon import TransferManager
+
 # ---------- AWS session helper ----------
 def make_session(profile_name=None, region_name=None):
     if profile_name:
@@ -130,6 +132,7 @@ class DualPaneS3(tk.Tk):
 
         self._build_ui()
         self._bind_keys()
+        self.transfer_manager = TransferManager(self)
 
         # Set transferconfig
         self.transfer_mode_var = tk.StringVar(value="High-Speed")
@@ -694,8 +697,14 @@ class DualPaneS3(tk.Tk):
                             key = (target + rel) if target.endswith("/") else (target + "/" + rel if target else rel)
                             extra_args={}
                             if self.checksum_algo:
-                                extra_Args["ChecksumAlgorithm"]=self.checksum_algo
-                            client.upload_file(full, bucket, key,ExtraArgs=extra_args, Config=self.transfer_config)
+                                extra_args["ChecksumAlgorithm"]=self.checksum_algo
+
+                            #client.upload_file(full, bucket, key,ExtraArgs=extra_args, Config=self.transfer_config)
+                            #Call back with Transfer manager
+                            callback=self.transfer_manager.create_callback(f,os.path.getsize(full))
+                            client.upload_file(full, bucket, key,ExtraArgs=extra_args, Config=self.transfer_config, Callback=callback)
+                            self.transfer_manager.mark_done(callback.transfer_id)
+                            
                     self.set_status("Folder upload complete.")
                     self.refresh_s3()
                 except Exception as e:
@@ -721,7 +730,12 @@ class DualPaneS3(tk.Tk):
                     extra_args["ChecksumAlgorithm"] = self.checksum_algo  # Option A: backend-validated checksum
                 print("Extra arguments:",extra_args)
 
-                client.upload_file(local_path, bucket, key, ExtraArgs=extra_args, Config=self.transfer_config)
+                #client.upload_file(local_path, bucket, key, ExtraArgs=extra_args, Config=self.transfer_config)
+                #Add call back
+                callback= self.transfer_manager.create_callback(os.path.basename(local_path),os.path.getsize(local_path))
+
+                client.upload_file(local_path, bucket, key, ExtraArgs=extra_args, Config=self.transfer_config, Callback=callback)
+                self.transfer_manager.mark_done(callback.transfer_id)
 
                 self.set_status("Upload complete.")
                 self.refresh_s3()
@@ -790,7 +804,17 @@ class DualPaneS3(tk.Tk):
                             dest = os.path.join(local_dir, rel)
                             os.makedirs(os.path.dirname(dest), exist_ok=True)
                             if not key.endswith("/"):
-                                client.download_file(bucket, key, dest,Config=self.transfer_config) #download files skip directories
+                                print(f"Key {key}")
+                                #client.download_file(bucket, key, dest,Config=self.transfer_config) #download files skip directories
+                                # Downlaod callback to trasnfer manager
+
+                                # Retrieve size
+                                obj_head=client.head_object(Bucket=bucket,Key=key)
+                                obj_size_bytes =obj_head["ContentLength"]
+
+                                callback = self.transfer_manager.create_callback(os.path.basename(key),obj_size_bytes)
+                                client.download_file(bucket, key, dest,Config=self.transfer_config, Callback=callback) #download files skip directories
+                                self.transfer_manager.mark_done(callback.transfer_id)
                     self.set_status("Download complete.")
                     self.refresh_local()
                 except Exception as e:
@@ -814,7 +838,14 @@ class DualPaneS3(tk.Tk):
                     self.set_status(f"Downloading s3://{bucket}/{key} → {save_as}")
                     client = self._get_s3_client()
                     os.makedirs(os.path.dirname(save_as), exist_ok=True)
-                    client.download_file(bucket, key, save_as, Config=self.transfer_config)
+                    #client.download_file(bucket, key, save_as, Config=self.transfer_config)
+                    #Download with callback to transfer manager
+                    obj =client.head_object(Bucket=bucket, Key=key)
+                    obj_size_bytes = obj["ContentLength"]
+
+                    callback=self.transfer_manager.create_callback(os.path.basename(key),obj_size_bytes)
+                    client.download_file(bucket, key, save_as, Config=self.transfer_config, Callback=callback)
+                    self.transfer_manager.mark_done(callback.transfer_id)
                     self.set_status("Download complete.")
                     self.refresh_local()
                 except Exception as e:
