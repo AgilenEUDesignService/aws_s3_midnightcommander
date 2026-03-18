@@ -221,6 +221,35 @@ class DualPaneS3(tk.Tk):
         self.status_var.set(txt)
         self.update_idletasks()
 
+    def compute_relative_path(self, key: str) -> str:
+        """
+        Computes the relative local path for a given S3 key inside a prefix.
+
+        If relative path becomes empty (""), fall back to using the last
+        component of the prefix as the folder name.
+        """
+        prefix = self.prefix_var.get().strip()
+
+        # Normalize prefix
+        if prefix and not prefix.endswith("/"):
+            prefix = prefix + "/"
+
+        # Case 1: key starts with prefix → strip it
+        if prefix and key.startswith(prefix):
+            rel = key[len(prefix):]
+        else:
+            # fallback (should rarely happen)
+            rel = key
+
+        # Case 2: rel becomes empty → use last part of prefix
+        if rel == "":
+            # Extract "trip" from "photos/2024/trip/"
+            last = prefix.strip("/").split("/")[-1]
+            rel = last + "/"   # ensure folder is created
+
+        return rel
+
+
     # ---------- SSO (pure boto) ----------
     def sso_login_and_select(self):
         start_url = (self.sso_start_url_var.get() or '').strip()
@@ -616,6 +645,34 @@ class DualPaneS3(tk.Tk):
                 self.set_status("Upload failed.")
         threading.Thread(target=_upload, daemon=True).start()
 
+    #FIX 1 DEBUG
+#    def compute_relative_path(self,key: str) -> str:
+#        """
+#        Computes the relative local path for a given S3 key inside a prefix.
+#
+#        If relative path becomes empty (""), fall back to using the last
+#        component of the prefix as the folder name.
+#        """
+#        prefix = self.prefix_var.get().strip()
+#        # Normalize prefix
+#        if prefix and not prefix.endswith("/"):
+#            prefix = prefix + "/"
+#
+#        # Case 1: key starts with prefix → strip it
+#        if prefix and key.startswith(prefix):
+#            rel = key[len(prefix):]
+#        else:
+#            # fallback (should rarely happen)
+#            rel = key
+#
+#        # Case 2: rel becomes empty → use last part of prefix
+#        if rel == "":
+#            # Extract "trip" from "photos/2024/trip/"
+#            last = prefix.strip("/").split("/")[-1]
+#            rel = last + "/"   # ensure folder is created
+#
+#        return rel
+
 
     def download_from_s3(self):
         typ, sel = self.get_selected_s3()
@@ -623,8 +680,8 @@ class DualPaneS3(tk.Tk):
             messagebox.showinfo("Download", "Select an S3 object or prefix to download.")
             return
         if typ == "prefix":
-            local_dir = filedialog.askdirectory(initialdir=self.local_path_var.get(), title="Download to directory")
-            #local_dir =self.local_path_var.get() # Download directly to left pane
+            #local_dir = filedialog.askdirectory(initialdir=self.local_path_var.get(), title="Download to directory")
+            local_dir =self.local_path_var.get().strip() # Download directly to left pane
             if not local_dir:
                 return
             bucket = self.bucket_var.get().strip()
@@ -643,11 +700,12 @@ class DualPaneS3(tk.Tk):
                             key = obj["Key"]
                             rel = key[len(prefix):] if key.startswith(prefix) else key
                             print(f"LEft rel: {rel}")
-                            rel="test" #DEBUG
+                            rel= self.compute_relative_path(key)
                             print(f"LEft rel: {rel}")
                             dest = os.path.join(local_dir, rel)
                             os.makedirs(os.path.dirname(dest), exist_ok=True)
-                            client.download_file(bucket, key, dest)
+                            if not key.endswith("/"):
+                                client.download_file(bucket, key, dest) #download files skip directories
                     self.set_status("Download complete.")
                     self.refresh_local()
                 except Exception as e:
@@ -657,8 +715,9 @@ class DualPaneS3(tk.Tk):
         else:
             bucket = self.bucket_var.get().strip()
             key = sel
-            save_as = filedialog.asksaveasfilename(initialdir=self.local_path_var.get(),
-                                                   initialfile=os.path.basename(key))
+            #save_as = filedialog.asksaveasfilename(initialdir=self.local_path_var.get(),
+            #                                       initialfile=os.path.basename(key))
+            save_as=os.path.join(self.local_path_var.get(),os.path.basename(key))
             #DEBUG
             print("==========")
             print(f"save_as: {save_as}")
