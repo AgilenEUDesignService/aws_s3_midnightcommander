@@ -21,7 +21,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 - Show status: pending, running, completed, failed.
 - Allow cancellation.
 
-### 4. Persistent User Configuration
+### [X] 4. Persistent User Configuration
 - Save selected profile, region, bucket, UI positions.
 - Store in JSON/YAML.
 
@@ -40,7 +40,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 - Tab to switch pane.
 - F3 view, F4 edit, F8 delete.
 
-### 3. Persist Pane Widths
+### [X] 3. Persist Pane Widths
 - Store sash positions.
 
 ### 4. Drag & Drop Support
