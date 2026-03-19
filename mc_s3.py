@@ -155,7 +155,14 @@ class DualPaneS3(tk.Tk):
                 self.geometry(geom)
             except:
                 pass
-
+        # Restore panedwindow sash position
+        saved_sash = self.config.get("pane_sash0")
+        if saved_sash is not None:
+            try:
+                saved_sash = int(saved_sash)
+                self.after(50, lambda: self.panes.sashpos(0,saved_sash))
+            except:
+                pass
 
         # Set transferconfig
         self.transfer_mode_var = tk.StringVar(value="High-Speed")
@@ -226,12 +233,12 @@ class DualPaneS3(tk.Tk):
 
 
         # Panes
-        panes = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
-        panes.pack(fill=tk.BOTH, expand=True)
+        self.panes = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
+        self.panes.pack(fill=tk.BOTH, expand=True)
 
         # Left: Local
-        left = ttk.Labelframe(panes, text="Local", padding=6)
-        panes.add(left, weight=1)
+        left = ttk.Labelframe(self.panes, text="Local", padding=6)
+        self.panes.add(left, weight=1)
 
         local_top = ttk.Frame(left)
         local_top.pack(side=tk.TOP, fill=tk.X, pady=(0,4))
@@ -254,8 +261,8 @@ class DualPaneS3(tk.Tk):
         self.local_tree.bind("<Double-1>", self.on_local_open)
 
         # Right: S3
-        right = ttk.Labelframe(panes, text="S3", padding=6)
-        panes.add(right, weight=1)
+        right = ttk.Labelframe(self.panes, text="S3", padding=6)
+        self.panes.add(right, weight=1)
 
         s3_top = ttk.Frame(right)
         s3_top.pack(side=tk.TOP, fill=tk.X, pady=(0,4))
@@ -376,6 +383,12 @@ class DualPaneS3(tk.Tk):
     def on_close(self):
         try:
             self.config.set("geometry",self.geometry())
+        except:
+            pass
+
+        try:
+            sash0 = self.panes.sashpos(0)
+            self.config.set("pane_sash0",sash0)
         except:
             pass
         self.destroy()

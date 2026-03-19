@@ -12,6 +12,9 @@ class ConfigManager:
       - local_path
       - transfer_mode
       - window geometry
+      - sso_start_url
+      - sso_region
+      - pane_sash0  # local/s3 seperator pane position
     """
 
     def __init__(self):
@@ -25,7 +28,8 @@ class ConfigManager:
             "transfer_mode": "",
             "geometry": "",
             "sso_start_url":"",
-            "sso_region":""
+            "sso_region":"",
+            "pane_sash0": None,
         }
         self.load()
 
