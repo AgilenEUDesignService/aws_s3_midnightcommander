@@ -181,8 +181,11 @@ class DualPaneS3(tk.Tk):
 
 
         # Set transferconfig
-        self.transfer_mode_var = tk.StringVar(value="High-Speed")
+        self.transfer_mode_var.set( self.config.get("transfer_mode"))
+        if self.transfer_mode_var.get() == "":
+            self.transfer_mode_var = tk.StringVar(value="Balanced") # default to balanced
         self.update_transfer_config()
+        self.transfer_mode_cb.set(self.transfer_mode_var.get())
 
         # init state
         #self.local_path_var.set(os.path.expanduser("~"))
@@ -242,7 +245,8 @@ class DualPaneS3(tk.Tk):
                 )
         self.transfer_mode_cb.pack(side=tk.LEFT,padx=(0,10))
 
-        self.transfer_mode_cb.set(self.transfer_mode_var.get())
+        #self.transfer_mode_var.set(self.transfer_mode_var.get())
+        self.transfer_mode_var.set(self.config.get("transfer_mode"))
 
         # Update config when changed
         self.transfer_mode_cb.bind("<<ComboboxSelected>>", lambda e: self.update_transfer_config())
@@ -411,6 +415,7 @@ class DualPaneS3(tk.Tk):
                     use_threads=True
                     )
         self.transfer_config = cfg
+        self.config.set("transfer_mode", mode)
         self.set_status(f"Transfer mode set to:{mode}")
 
     def on_close(self):
