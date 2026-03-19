@@ -147,6 +147,7 @@ class DualPaneS3(tk.Tk):
         self.transfer_mode_var.set(self.config.get("transfer_mode"))
         self.sso_start_url_var.set(self.config.get("sso_start_url"))
         self.sso_region_var.set(self.config.get("sso_region"))
+        self.recursive_var.set(self.config.get("recursive",False))
         
         # Restore window geometry
         geom = self.config.get("geometry")
@@ -202,7 +203,9 @@ class DualPaneS3(tk.Tk):
         self.region_var = tk.StringVar()
         self.region_var.trace_add("write", lambda *args:
                                   self.config.set("region", self.region_var.get()))
-        self.recursive_var = tk.BooleanVar(value=True)
+        self.recursive_var = tk.BooleanVar(value=False)
+        self.recursive_var.trace_add("write", lambda *a:
+                                     self.config.set("recursive",self.recursive_var.get()))
 
         ttk.Label(toolbar, text="AWS Profile:").pack(side=tk.LEFT, padx=(0,4))
         self.profile_cb = ttk.Combobox(toolbar, textvariable=self.profile_var, width=16)
@@ -217,6 +220,7 @@ class DualPaneS3(tk.Tk):
 
         ttk.Button(toolbar, text="Load Buckets", command=self.load_buckets).pack(side=tk.LEFT, padx=(0,10))
         ttk.Checkbutton(toolbar, text="S3 Recursive", variable=self.recursive_var).pack(side=tk.LEFT)
+
 
         # SSO controls (pure boto flow)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=10, fill=tk.Y)
