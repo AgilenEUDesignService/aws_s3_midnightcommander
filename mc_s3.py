@@ -261,14 +261,17 @@ class DualPaneS3(tk.Tk):
         ttk.Checkbutton(toolbar, text="S3 Recursive", variable=self.recursive_var).pack(side=tk.LEFT)
 
         # ========== MENU BAR =============
-        menubar =tk.Menu(self)
-        settings_menu=tk.Menu(menubar, tearoff=0)
-        settings_menu.add_command(
-                label= "AWS / SSO Settings ..",
-                command=self.open_settings_window #todo
-                )
-        menubar.add_cascade(label="Settings", menu=settings_menu)
-        self.configure(menu=menubar)
+        # Add the menubar later on currently a button on the right is sufficient
+        #menubar =tk.Menu(self)
+        #settings_menu=tk.Menu(menubar, tearoff=0)
+        #settings_menu.add_command(
+        #        label= "AWS / SSO Settings ..",
+        #        command=self.open_settings_window #todo
+        #        )
+        #menubar.add_cascade(label="Settings", menu=settings_menu)
+        #self.configure(menu=menubar)
+
+        ttk.Button(toolbar,text="Settings",command=self.open_settings_window).pack(side=tk.RIGHT, padx=(10,0))
 
 
         # ========== Panes ==============
@@ -318,7 +321,7 @@ class DualPaneS3(tk.Tk):
         ttk.Entry(s3_top, textvariable=self.prefix_var, width=40).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6,0))
         self.prefix_var.trace_add("write", lambda *a:
                                   self.config.set("prefix",self.prefix_var.get()))
-        ttk.Button(s3_top, text="Up", command=self.s3_up).pack(side=tk.LEFT, padx=(6,0))
+        #ttk.Button(s3_top, text="Up", command=self.s3_up).pack(side=tk.LEFT, padx=(6,0)) # embedded inside list
 
         self.s3_tree = ttk.Treeview(right, columns=("key","size_mb","last_modified"), show="headings", selectmode="browse")
         for col, txt, w, anchor in [
