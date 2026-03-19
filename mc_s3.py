@@ -730,10 +730,19 @@ class DualPaneS3(tk.Tk):
                 if not self.recursive_var.get():
                     params["Delimiter"] = "/"
 
+                # Insert UP entry if prefi is not empty
+                if prefix:
+                    self.s3_tree.insert(
+                            "","end",
+                            values=("[..]","",""),
+                            iid="__S3_UP__"
+                            )
                 total = 0
                 for page in paginator.paginate(**params):
                     for cp in page.get("CommonPrefixes", []):
                         pfx = cp.get("Prefix", "")
+                        if pfx == prefix:
+                            continue # skip showing the prefix
                         disp = f"[{pfx}]"
                         self.s3_tree.insert("", "end", values=(disp, "", ""), iid=f"p::{pfx}")
                         total += 1
@@ -765,6 +774,9 @@ class DualPaneS3(tk.Tk):
     def on_s3_open(self, _event=None):
         item = self.s3_tree.focus()
         if not item:
+            return
+        if item == "__S3_UP__":
+            self.s3_up()
             return
         if item.startswith("p::"):
             pfx = item.split("::",1)[1]
