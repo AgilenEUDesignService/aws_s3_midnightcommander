@@ -198,37 +198,40 @@ class TransferManager:
         self.ui_queue.put(("transfer_done", {"id": tid}))
 
     def _poll_ui_queue(self):
-        try:
-            while True:
+    
+        handled = False
+    
+        # Process a few events
+        for _ in range(20):
+            try:
                 event, payload = self.ui_queue.get_nowait()
-
-                if event == "progress_update":
-                    # Update global progress
-                    tid = payload["id"]
-                    done = payload["bytes_done"]
-                    total = payload["bytes_total"]
-
-                    # Recalculate global progress (simple sum)
-                    agg_done = 0
-                    agg_total = 0
-                    for t in self.active_transfers.values():
-                        agg_done += t.get("done", 0)
-                        agg_total += t.get("size", 0)
-
-                    # Update this transfer's done bytes
+            except queue.Empty:
+                break
+    
+            handled = True
+    
+            if event == "progress_update":
+                tid = payload["id"]
+                done = payload["bytes_done"]
+                if tid in self.active_transfers:
                     self.active_transfers[tid]["done"] = done
-
-                    if agg_total > 0:
-                        pct = (agg_done / agg_total) * 100
-                        self.progressbar["value"] = pct
-
-                elif event == "transfer_done":
-                    # final global update
-                    tid = payload["id"]
-                    if tid in self.active_transfers:
-                        del self.active_transfers[tid]
-
-        except queue.Empty:
-            pass
-
-        self.parent.after(200, self._poll_ui_queue)
+    
+            elif event == "transfer_done":
+                tid = payload["id"]
+                if tid in self.active_transfers:
+                    del self.active_transfers[tid]
+    
+        # If we handled events or there are active transfers, update global progress
+        if handled or self.active_transfers:
+            agg_done = sum(t.get("done", 0) for t in self.active_transfers.values())
+            agg_total = sum(t.get("size", 0) for t in self.active_transfers.values())
+    
+            if agg_total > 0:
+                self.progressbar["value"] = (agg_done / agg_total) * 100
+    
+            delay = 200  # active mode
+        else:
+            # Idle mode: reduce update frequency
+            delay = 2000  # 2 seconds, gentle on WSL
+    
+        self.parent.after(delay, self._poll_ui_queue)
