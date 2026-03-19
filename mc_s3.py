@@ -164,6 +164,22 @@ class DualPaneS3(tk.Tk):
             except:
                 pass
 
+        # Restore local tree widths
+        local_widths=self.config.get("local_tree_colwidths",{})
+        for col,width in local_widths.items():
+            try:
+                self.local_tree.column(col,width=width)
+            except:
+                pass
+        # Restore s3 tree widths
+        s3_widths=self.config.get("s3_tree_colwidths",{})
+        for col,width in s3_widths.items():
+            try:
+                self.s3_tree.column(col,width=width)
+            except:
+                pass
+
+
         # Set transferconfig
         self.transfer_mode_var = tk.StringVar(value="High-Speed")
         self.update_transfer_config()
@@ -352,6 +368,23 @@ class DualPaneS3(tk.Tk):
 
         return rel
 
+    def save_local_tree_widths(self):
+        widths = {
+                "name":self.local_tree.column("name")["width"],
+                "size":self.local_tree.column("size")["width"],
+                "mtime":self.local_tree.column("mtime")["width"]
+                }
+        self.config.set("local_tree_colwidths",widths)
+
+    def save_s3_tree_widths(self):
+        widths= {
+                "key": self.s3_tree.column("key")["width"],
+                "size_mb": self.s3_tree.column("size_mb")["width"],
+                "last_modified": self.s3_tree.column("last_modified")["width"]
+                }
+        self.config.set("s3_tree_colwidths",widths)
+
+
     def update_transfer_config(self):
         """
         Updates self.transfer_config according to the selected mode.
@@ -391,6 +424,19 @@ class DualPaneS3(tk.Tk):
             self.config.set("pane_sash0",sash0)
         except:
             pass
+
+        try:
+            self.save_local_tree_widths()
+        except Exception as e:
+            print("Error saving localtreecolumns:",e)
+            pass
+        
+        try:
+            self.save_s3_tree_widths()
+        except Exception as e:
+            print("Error saving S3treecolumns:",e)
+            pass
+
         self.destroy()
 
 
