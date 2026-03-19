@@ -195,46 +195,48 @@ class DualPaneS3(tk.Tk):
 
     # ---------- UI ----------
     def _build_ui(self):
-        # Toolbar
+        # ======== Toolbar =========
         toolbar = ttk.Frame(self, padding=8)
         toolbar.pack(side=tk.TOP, fill=tk.X)
 
+        # SSO controls (pure boto flow)
+        #ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=10, fill=tk.Y)
+        #ttk.Label(toolbar, text="SSO Start URL:").pack(side=tk.LEFT, padx=(0,4))
+        self.sso_start_url_var = tk.StringVar()
+        #ttk.Entry(toolbar, textvariable=self.sso_start_url_var, width=28).pack(side=tk.LEFT, padx=(0,10))
+        self.sso_start_url_var.trace_add("write", lambda *a:
+                                         self.config.set("sso_start_url",self.sso_start_url_var.get()))
+        #ttk.Label(toolbar, text="SSO Region:").pack(side=tk.LEFT, padx=(0,4))
+        self.sso_region_var = tk.StringVar()
+        #ttk.Entry(toolbar, textvariable=self.sso_region_var, width=14).pack(side=tk.LEFT, padx=(0,10))
+        self.sso_region_var.trace_add("write", lambda *a:
+                                      self.config.set("sso_region",self.sso_region_var.get()))
+        ttk.Button(toolbar, text="SSO Login & Select Role", command=self.sso_login_and_select).pack(side=tk.LEFT,padx=(0,10))
+
+        # Profile Settings pakced on settings_window
         self.profile_var = tk.StringVar()
         self.region_var = tk.StringVar()
         self.region_var.trace_add("write", lambda *args:
                                   self.config.set("region", self.region_var.get()))
+
         self.recursive_var = tk.BooleanVar(value=False)
         self.recursive_var.trace_add("write", lambda *a:
                                      self.config.set("recursive",self.recursive_var.get()))
 
-        ttk.Label(toolbar, text="AWS Profile:").pack(side=tk.LEFT, padx=(0,4))
+        #ttk.Label(toolbar, text="AWS Profile:").pack(side=tk.LEFT, padx=(0,4))
         self.profile_cb = ttk.Combobox(toolbar, textvariable=self.profile_var, width=16)
         self.profile_cb["values"] = self._detect_profiles()
-        self.profile_cb.pack(side=tk.LEFT, padx=(0,10))
+        #self.profile_cb.pack(side=tk.LEFT, padx=(0,10))
         self.profile_cb.bind("<<ComboboxSelected>>", lambda e:
                              self.config.set("profile",self.profile_var.get()))
 
 
-        ttk.Label(toolbar, text="Region:").pack(side=tk.LEFT, padx=(0,4))
-        ttk.Entry(toolbar, textvariable=self.region_var, width=14).pack(side=tk.LEFT, padx=(0,10))
+        #ttk.Label(toolbar, text="Region:").pack(side=tk.LEFT, padx=(0,4))
+        #ttk.Entry(toolbar, textvariable=self.region_var, width=14).pack(side=tk.LEFT, padx=(0,10))
 
         ttk.Button(toolbar, text="Load Buckets", command=self.load_buckets).pack(side=tk.LEFT, padx=(0,10))
-        ttk.Checkbutton(toolbar, text="S3 Recursive", variable=self.recursive_var).pack(side=tk.LEFT)
 
 
-        # SSO controls (pure boto flow)
-        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=10, fill=tk.Y)
-        ttk.Label(toolbar, text="SSO Start URL:").pack(side=tk.LEFT, padx=(0,4))
-        self.sso_start_url_var = tk.StringVar()
-        ttk.Entry(toolbar, textvariable=self.sso_start_url_var, width=28).pack(side=tk.LEFT, padx=(0,10))
-        self.sso_start_url_var.trace_add("write", lambda *a:
-                                         self.config.set("sso_start_url",self.sso_start_url_var.get()))
-        ttk.Label(toolbar, text="SSO Region:").pack(side=tk.LEFT, padx=(0,4))
-        self.sso_region_var = tk.StringVar()
-        ttk.Entry(toolbar, textvariable=self.sso_region_var, width=14).pack(side=tk.LEFT, padx=(0,10))
-        self.sso_region_var.trace_add("write", lambda *a:
-                                      self.config.set("sso_region",self.sso_region_var.get()))
-        ttk.Button(toolbar, text="SSO Login & Select Role", command=self.sso_login_and_select).pack(side=tk.LEFT)
 
         # --- Transfer Mode Selection ---
         ttk.Label(toolbar, text = "Transfer Mode:").pack(side=tk.LEFT,padx=(12,4))
@@ -255,8 +257,21 @@ class DualPaneS3(tk.Tk):
         # Update config when changed
         self.transfer_mode_cb.bind("<<ComboboxSelected>>", lambda e: self.update_transfer_config())
 
+        # S3 recursive pack
+        ttk.Checkbutton(toolbar, text="S3 Recursive", variable=self.recursive_var).pack(side=tk.LEFT)
 
-        # Panes
+        # ========== MENU BAR =============
+        menubar =tk.Menu(self)
+        settings_menu=tk.Menu(menubar, tearoff=0)
+        settings_menu.add_command(
+                label= "AWS / SSO Settings ..",
+                command=self.open_settings_window #todo
+                )
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        self.configure(menu=menubar)
+
+
+        # ========== Panes ==============
         self.panes = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
         self.panes.pack(fill=tk.BOTH, expand=True)
 
@@ -335,6 +350,45 @@ class DualPaneS3(tk.Tk):
         self.bind("<F6>", lambda e: self.download_from_s3())
         self.bind("<F7>", lambda e: self.new_folder())
         self.bind("<Delete>", lambda e: self.delete_selected())
+
+    # Build UI ends here
+
+    
+    def open_settings_window(self):
+        win = tk.Toplevel(self)
+        win.title("AWS / SSO Settings")
+        win.geometry("420x260")
+        win.resizable(False, False)
+        win.transient(self)
+        win.grab_set()
+
+        frm = ttk.Frame(win, padding=12)
+        frm.pack(fill="both", expand=True)
+
+        # SSO Start URL
+        ttk.Label(frm, text="SSO Start URL:").grid(row=0, column=0, sticky="w")
+        url_entry = ttk.Entry(frm, textvariable=self.sso_start_url_var, width=30)
+        url_entry.grid(row=0, column=1, pady=4, sticky="ew")
+
+        # SSO Region
+        ttk.Label(frm, text="SSO Region:").grid(row=1, column=0, sticky="w")
+        sso_region_entry = ttk.Entry(frm, textvariable=self.sso_region_var, width=30)
+        sso_region_entry.grid(row=1, column=1, pady=4, sticky="ew")
+
+        # AWS Profile
+        ttk.Label(frm, text="AWS Profile:").grid(row=2, column=0, sticky="w")
+        cb = ttk.Combobox(frm, textvariable=self.profile_var,
+                          values=self._detect_profiles(), width=30)
+        cb.grid(row=2, column=1, pady=4, sticky="ew")
+
+        # AWS Region
+        ttk.Label(frm, text="AWS Region:").grid(row=3, column=0, sticky="w")
+        region_entry = ttk.Entry(frm, textvariable=self.region_var, width=30)
+        region_entry.grid(row=3, column=1, pady=4, sticky="ew")
+
+        ttk.Button(frm, text="Close", command=win.destroy).grid(row=10, column=1, sticky="e", pady=12)
+
+
 
     # ---------- Helpers ----------
     def _detect_profiles(self):
