@@ -148,6 +148,7 @@ class DualPaneS3(tk.Tk):
         self.sso_start_url_var.set(self.config.get("sso_start_url"))
         self.sso_region_var.set(self.config.get("sso_region"))
         self.recursive_var.set(self.config.get("recursive",False))
+        self.hide_s3_tree_prefix_var.set(self.config.get("hide_s3_tree_prefix",True))
         
         # Restore window geometry
         geom = self.config.get("geometry")
@@ -223,6 +224,10 @@ class DualPaneS3(tk.Tk):
         self.recursive_var.trace_add("write", lambda *a:
                                      self.config.set("recursive",self.recursive_var.get()))
 
+        self.hide_s3_tree_prefix_var = tk.BooleanVar(value=True)
+        self.hide_s3_tree_prefix_var.trace_add("write", lambda *a:
+                                           self.config.set("hide_s3_tree_prefix",self.hide_s3_tree_prefix_var.get()))
+
         #ttk.Label(toolbar, text="AWS Profile:").pack(side=tk.LEFT, padx=(0,4))
         self.profile_cb = ttk.Combobox(toolbar, textvariable=self.profile_var, width=16)
         self.profile_cb["values"] = self._detect_profiles()
@@ -259,6 +264,8 @@ class DualPaneS3(tk.Tk):
 
         # S3 recursive pack
         ttk.Checkbutton(toolbar, text="S3 Recursive", variable=self.recursive_var).pack(side=tk.LEFT)
+        # S3 Hide Tree Prefix
+        ttk.Checkbutton(toolbar, text="S3 Hide Prefix", variable=self.hide_s3_tree_prefix_var).pack(side=tk.LEFT)
 
         # ========== MENU BAR =============
         # Add the menubar later on currently a button on the right is sufficient
@@ -321,6 +328,7 @@ class DualPaneS3(tk.Tk):
         ttk.Entry(s3_top, textvariable=self.prefix_var, width=40).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6,0))
         self.prefix_var.trace_add("write", lambda *a:
                                   self.config.set("prefix",self.prefix_var.get()))
+
         #ttk.Button(s3_top, text="Up", command=self.s3_up).pack(side=tk.LEFT, padx=(6,0)) # embedded inside list
 
         self.s3_tree = ttk.Treeview(right, columns=("key","size_mb","last_modified"), show="headings", selectmode="browse")
@@ -501,6 +509,10 @@ class DualPaneS3(tk.Tk):
             self.save_s3_tree_widths()
         except Exception as e:
             print("Error saving S3treecolumns:",e)
+            pass
+        try:
+            self.config.set("hide_s3_tree_prefix",self.hide_s3_tree_prefix_var.get())
+        except:
             pass
 
         self.destroy()
@@ -776,6 +788,7 @@ class DualPaneS3(tk.Tk):
         def _list():
             bucket = (self.bucket_var.get() or "").strip()
             prefix = (self.prefix_var.get() or "").strip()
+            hideprefix=self.hide_s3_tree_prefix_var.get()
             if not bucket:
                 messagebox.showwarning("Bucket required", "Select a bucket first.")
                 return
@@ -805,14 +818,21 @@ class DualPaneS3(tk.Tk):
                         if pfx == prefix:
                             continue # skip showing the prefix
                         disp = f"[{pfx}]"
+                        if hideprefix:
+                            strippedkey=pfx[len(prefix):]
+                            disp=f"[{strippedkey}]"
                         self.s3_tree.insert("", "end", values=(disp, "", ""), iid=f"p::{pfx}")
                         total += 1
                     for obj in page.get("Contents", []):
                         key = obj["Key"]
+                        if hideprefix:
+                            disp=key[len(prefix):]
+                        else:
+                            disp=key
                         size_mb = f"{(obj.get('Size', 0)/(1024*1024)):.3f}"
                         lm = obj.get("LastModified")
                         lm_str = lm.strftime("%Y-%m-%d %H:%M:%S") if isinstance(lm, datetime) else ""
-                        self.s3_tree.insert("", "end", values=(key, size_mb, lm_str), iid=f"o::{key}")
+                        self.s3_tree.insert("", "end", values=(disp, size_mb, lm_str), iid=f"o::{key}")
                         total += 1
                 self.set_status(f"Done. {total} item(s).")
             except Exception as e:

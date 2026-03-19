@@ -17,6 +17,7 @@ class ConfigManager:
       - pane_sash0  # local/s3 seperator pane position
       - local_tree_colwidths
       - s3_tree_colwidths
+      - hide_s3_tree_prefix
     """
 
     def __init__(self):
@@ -33,7 +34,9 @@ class ConfigManager:
             "sso_region":"",
             "pane_sash0": None,
             "local_tree_colwidths":{},
-            "s3_tree_colwidths":{}
+            "s3_tree_colwidths":{},
+            "recursive": False,
+            "hide_s3_tree_prefix": True
         }
         self.load()
 
