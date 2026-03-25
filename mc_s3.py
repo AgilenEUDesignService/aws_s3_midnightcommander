@@ -11,8 +11,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from boto3.s3.transfer import TransferConfig # parallel downloads
 
-from transfer_manager_addon import TransferManager
-from config_manager_addon import ConfigManager
+from libs.transfer_manager_addon import TransferManager
+from libs.config_manager_addon import ConfigManager
 
 # ---------- AWS session helper ----------
 def make_session(profile_name=None, region_name=None):
@@ -544,7 +544,7 @@ class DualPaneS3(tk.Tk):
                 expires_in = int(device["expiresIn"])
                 interval = int(device["interval"]) if "interval" in device else 5
                 #DEBUG
-                print(f"Device,{device}")
+                #print(f"Device,{device}")
                 self.set_status(f"Device code: {code}")
                 #TODO -> Here have a popup window showing the device code!
 
@@ -581,9 +581,9 @@ class DualPaneS3(tk.Tk):
                 if not access_token:
                     raise RuntimeError("SSO login not completed before expiration.")
                 #DEBUG
-                print("==================")
-                print(f"TOK access token {tok}")
-                print("-------------")
+                #print("==================")
+                #print(f"TOK access token {tok}")
+                #print("-------------")
 
                 # List accounts and choose
                 sso = boto3.client("sso", region_name=sso_region)
@@ -612,9 +612,9 @@ class DualPaneS3(tk.Tk):
                 account = accounts[idx]
                 account_id = account["accountId"]
                 #DEBUG
-                print("==============")
-                print(f"Account: {account}")
-                print("--------------")
+                #print("==============")
+                #print(f"Account: {account}")
+                #print("--------------")
 
                 # List roles for account
                 roles = []
@@ -646,8 +646,8 @@ class DualPaneS3(tk.Tk):
                     accessToken=access_token,
                 )["roleCredentials"]
                 #DEBUG
-                print("==========")
-                print(f"Role Credentials {creds}")
+                #print("==========")
+                #print(f"Role Credentials {creds}")
 
                 region = (self.region_var.get() or '').strip() or sso_region
                 session = boto3.Session(
@@ -770,10 +770,10 @@ class DualPaneS3(tk.Tk):
                 client = self._get_s3_client()
                 resp = client.list_buckets()
                 #DEBUG
-                print("=========")
-                print(f"Response list buckets:")
-                print(f"{resp}")
-                print("---------")
+                #print("=========")
+                #print(f"Response list buckets:")
+                #print(f"{resp}")
+                #print("---------")
                 names = sorted([b["Name"] for b in resp.get("Buckets", [])])
                 self.bucket_cb["values"] = names
                 if names and not self.bucket_var.get():
@@ -932,7 +932,7 @@ class DualPaneS3(tk.Tk):
                 extra_args = {}
                 if self.checksum_algo:
                     extra_args["ChecksumAlgorithm"] = self.checksum_algo  # Option A: backend-validated checksum
-                print("Extra arguments:",extra_args)
+                #print("Extra arguments:",extra_args)
 
                 #client.upload_file(local_path, bucket, key, ExtraArgs=extra_args, Config=self.transfer_config)
                 #Add call back
@@ -998,17 +998,17 @@ class DualPaneS3(tk.Tk):
                     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
                         for obj in page.get("Contents", []):
                             #DEBUG
-                            print(f"Object in prefix: {obj}")
-                            print(f"prefix {prefix}")
+                            #print(f"Object in prefix: {obj}")
+                            #print(f"prefix {prefix}")
                             key = obj["Key"]
                             rel = key[len(prefix):] if key.startswith(prefix) else key
-                            print(f"LEft rel: {rel}")
+                            #print(f"LEft rel: {rel}")
                             rel= self.compute_relative_path(key)
-                            print(f"LEft rel: {rel}")
+                            #print(f"LEft rel: {rel}")
                             dest = os.path.join(local_dir, rel)
                             os.makedirs(os.path.dirname(dest), exist_ok=True)
                             if not key.endswith("/"):
-                                print(f"Key {key}")
+                                #print(f"Key {key}")
                                 #client.download_file(bucket, key, dest,Config=self.transfer_config) #download files skip directories
                                 # Downlaod callback to trasnfer manager
 
@@ -1032,9 +1032,9 @@ class DualPaneS3(tk.Tk):
             #                                       initialfile=os.path.basename(key))
             save_as=os.path.join(self.local_path_var.get(),os.path.basename(key))
             #DEBUG
-            print("==========")
-            print(f"save_as: {save_as}")
-            print("----------")
+            #print("==========")
+            #print(f"save_as: {save_as}")
+            #print("----------")
             if not save_as:
                 return
             def _dl():
