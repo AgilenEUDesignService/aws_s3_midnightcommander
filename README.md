@@ -35,3 +35,6 @@ python3 mc_s3.py
 ## Tips
 - If you also use non‑SSO profiles, pick a profile and region and click **Load Buckets**. The app will use that profile.
 - If profile credentials are missing, and SSO fields are filled, the app can prompt you to login with SSO and then retry.
+
+## Binaries
+- A Windows Exe file is generated if you fail to install from command line. Available in dis folder. 
