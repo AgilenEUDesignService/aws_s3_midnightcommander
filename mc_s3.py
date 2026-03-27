@@ -119,7 +119,13 @@ class DualPaneS3(tk.Tk):
         self.minsize(980, 600)
 
         # SSO runtime state
-        self._sso_state = None  # dict with: session, expiration_ms, account_id, role_name, sso_region
+        # Seperate roles:
+        # - browse -> short-lived (list / navigate)
+        # - transfer -> long-lived (upload / download)
+        self._sso_state = {
+                "browse":None,
+                "transfer": None
+                }
 
         #Enable S3-validated checksums
         self.checksum_algo ="SHA256"
@@ -639,6 +645,59 @@ class DualPaneS3(tk.Tk):
                     return
                 role_name = dlg2.result
 
+                usage = tk.StringVar(value="browse")
+
+                dlg3 = tk.Toplevel(self)
+                dlg3.title("Role Usage")
+                dlg3.transient(self)
+                dlg3.grab_set()
+                dlg3.resizable(False, False)
+
+                frm = ttk.Frame(dlg3, padding=12)
+                frm.pack(fill="both",expand=True)
+
+                ttk.Label(
+                        frm,
+                        text=f"How should the role '{role_name}' be used?",
+                        wraplength=360).pack(anchor="w")
+                ttk.Radiobutton(
+                        frm,
+                        text="Browse (list buckets, prefixes, objects)",
+                        variable=usage,
+                        value="browse"
+                        ).pack(anchor="w")
+
+                ttk.Radiobutton(
+                        frm,
+                        text="Transfer (upload / download with full object keys)",
+                        variable=usage,
+                        value="transfer"
+                        ).pack(anchor="w")
+
+                btns = ttk.Frame(frm)
+                btns.pack(fill="x")
+
+                def _ok():
+                    dlg3.destroy()
+
+                def _cancel():
+                    usage.set("")
+                    dlg3.destroy()
+
+                ttk.Button(btns, text="OK", command=_ok).pack(side="right")
+                ttk.Button(btns, text="Cancel", command=_cancel).pack(side="right",padx=(0,6))
+
+                self.wait_window(dlg3)
+
+                usage = usage.get()
+                if not usage:
+                    self.set_status("SSO cancelled.")
+                    return
+
+
+
+
+
                 # Get role credentials
                 creds = sso.get_role_credentials(
                     accountId=account_id,
@@ -657,7 +716,7 @@ class DualPaneS3(tk.Tk):
                     region_name=region,
                 )
 
-                self._sso_state = {
+                self._sso_state[usage]= {
                     "session": session,
                     "expiration_ms": int(creds["expiration"]),
                     "account_id": account_id,
@@ -665,50 +724,77 @@ class DualPaneS3(tk.Tk):
                     "sso_region": sso_region,
                 }
                 exp = datetime.fromtimestamp(creds["expiration"]/1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
-                self.set_status(f"SSO session established (expires {exp}).")
+                #self.set_status(f"SSO session established (expires {exp}).")
+                self.set_status(
+                        f"SSO '{usage}' role established: {role_name} (expires {exp})."
+                        )
                 #TODO add this to a log visible
             except Exception as e:
                 messagebox.showerror("SSO Error", str(e))
                 self.set_status("SSO failed.")
         threading.Thread(target=_sso_flow, daemon=True).start()
 
-    def _sso_client_if_valid(self, service_name):
-        if not self._sso_state:
+
+    def _sso_client_if_valid(self, purpose, service_name="s3"):
+        """
+        Return a boto3 client for given purpose ('browse' or 'transfer')
+        if an SSO session exists and is still valid.
+        """
+        state= self._sso_state.get(purpose)
+        if not state:
             return None
-        exp_ms = self._sso_state.get("expiration_ms", 0)
+
+        exp_ms = state.get("expiration_ms", 0)
         now_ms = int(time.time() * 1000)
-        if now_ms + 60_000 >= exp_ms:  # 60s skew
-            # expired
-            self._sso_state = None
+
+        # Expired (with skew)
+        if now_ms + 60_000 >= exp_ms:
+            self._sso_state[purpose] = None
+            self.set_status(f"SSO {purpose} role expired.")
             return None
-        sess = self._sso_state.get("session")
+
+        sess = state.get("session")
         if not sess:
             return None
+
         return sess.client(service_name)
 
-    def _get_s3_client(self):
-        # Prefer valid SSO session if present
-        client = self._sso_client_if_valid("s3")
+
+    def _get_s3_client(self,purpose="browse"):
+        """
+        Obtain an S3 client for the given purpose.
+
+        Rules:
+        - browse -> browse role OR profile fallback
+        - transger -> transfer role preferred, fallback to browse role
+        """
+
+        # ------ 1. Preferred role --------
+        client = self._sso_client_if_valid(purpose,"s3")
         if client:
             return client
 
-        profile = (self.profile_var.get() or "").strip() or None
-        region = (self.region_var.get() or "").strip() or None
+        # ---- 2. Transfer fallback to browse role ----
+        if purpose == "transfer":
+            fallback=self._sso_client_if_valid("browse","s3")
+            if fallback:
+                self.set_status(
+                        "Transfer role not available, using browse role for transfer."
+                        )
+                return fallback
+        # ---- 3. Profile fallback only allowed for browsing ----
+        if purpose == "browse":
+            profile = (self.profile_var.get() or "").strip() or None
+            region = (self.region_var.get() or "").strip() or None
+            try:
+                return make_session(profile,region).client("s3")
+            except Exception:
+                pass
 
-        # Try profile/ambient creds
-        try:
-            return make_session(profile, region).client("s3")
-        except Exception as e:
-            # If SSO config present, offer to run SSO flow
-            start_url = (self.sso_start_url_var.get() or '').strip()
-            sso_region = (self.sso_region_var.get() or '').strip()
-            if start_url and sso_region:
-                if messagebox.askyesno("AWS SSO", "Credentials unavailable. Run SSO login now?"):
-                    self.sso_login_and_select()
-                    # After login completes, user can retry the action
-                    raise RuntimeError("SSO login triggered. Retry your action after login completes.")
-            # Otherwise, bubble the error
-            raise
+        # ---- 4. Final failure
+        raise RuntimeError(
+                f"No valid credential available for '{purpose}' operations."
+                )
 
     # ---------- Local pane ops ----------
     def pick_local_root(self):
@@ -767,7 +853,7 @@ class DualPaneS3(tk.Tk):
         def _load():
             try:
                 self.set_status("Loading buckets…")
-                client = self._get_s3_client()
+                client = self._get_s3_client("browse")
                 resp = client.list_buckets()
                 #DEBUG
                 #print("=========")
@@ -796,7 +882,7 @@ class DualPaneS3(tk.Tk):
             for i in self.s3_tree.get_children():
                 self.s3_tree.delete(i)
             try:
-                client = self._get_s3_client()
+                client = self._get_s3_client("browse")
                 paginator = client.get_paginator("list_objects_v2")
                 params = {"Bucket": bucket}
                 if prefix:
@@ -893,7 +979,7 @@ class DualPaneS3(tk.Tk):
             def _upload_dir():
                 try:
                     self.set_status("Uploading folder…")
-                    client = self._get_s3_client()
+                    client = self._get_s3_client("transfer")
                     for root, dirs, files in os.walk(local_path):
                         for f in files:
                             full = os.path.join(root, f)
@@ -927,7 +1013,7 @@ class DualPaneS3(tk.Tk):
         def _upload():
             try:
                 self.set_status(f"Uploading {os.path.basename(local_path)} → s3://{bucket}/{key}")
-                client = self._get_s3_client()
+                client = self._get_s3_client("transfer")
 
                 extra_args = {}
                 if self.checksum_algo:
@@ -993,8 +1079,10 @@ class DualPaneS3(tk.Tk):
                 #TODO fix here!!!!! it doesn't download folders properly
                 try:
                     self.set_status(f"Downloading s3://{bucket}/{prefix} → {local_dir}")
-                    client = self._get_s3_client()
-                    paginator = client.get_paginator("list_objects_v2")
+                    #client = self._get_s3_client()
+                    browse_client=self.get_s3_client("browse")
+                    transfer_client=self.get_s3_client("transfer")
+                    paginator = browse_client.get_paginator("list_objects_v2")
                     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
                         for obj in page.get("Contents", []):
                             #DEBUG
@@ -1013,11 +1101,11 @@ class DualPaneS3(tk.Tk):
                                 # Downlaod callback to trasnfer manager
 
                                 # Retrieve size
-                                obj_head=client.head_object(Bucket=bucket,Key=key)
+                                obj_head=browse_client.head_object(Bucket=bucket,Key=key)
                                 obj_size_bytes =obj_head["ContentLength"]
 
                                 callback = self.transfer_manager.create_callback(os.path.basename(key),obj_size_bytes)
-                                client.download_file(bucket, key, dest,Config=self.transfer_config, Callback=callback) #download files skip directories
+                                transfer_client.download_file(bucket, key, dest,Config=self.transfer_config, Callback=callback) #download files skip directories
                                 self.transfer_manager.mark_done(callback.transfer_id)
                     self.set_status("Download complete.")
                     self.refresh_local()
@@ -1040,15 +1128,16 @@ class DualPaneS3(tk.Tk):
             def _dl():
                 try:
                     self.set_status(f"Downloading s3://{bucket}/{key} → {save_as}")
-                    client = self._get_s3_client()
+                    browse_client = self._get_s3_client("browse")
+                    transfer_client = self._get_s3_client("transfer")
                     os.makedirs(os.path.dirname(save_as), exist_ok=True)
                     #client.download_file(bucket, key, save_as, Config=self.transfer_config)
                     #Download with callback to transfer manager
-                    obj =client.head_object(Bucket=bucket, Key=key)
+                    obj =browse_client.head_object(Bucket=bucket, Key=key)
                     obj_size_bytes = obj["ContentLength"]
 
                     callback=self.transfer_manager.create_callback(os.path.basename(key),obj_size_bytes)
-                    client.download_file(bucket, key, save_as, Config=self.transfer_config, Callback=callback)
+                    transfer_client.download_file(bucket, key, save_as, Config=self.transfer_config, Callback=callback)
                     self.transfer_manager.mark_done(callback.transfer_id)
                     self.set_status("Download complete.")
                     self.refresh_local()
@@ -1119,7 +1208,7 @@ class DualPaneS3(tk.Tk):
                     return
                 def _del_obj():
                     try:
-                        client = self._get_s3_client()
+                        client = self._get_s3_client("browse")
                         client.delete_object(Bucket=bucket, Key=sel)
                         self.refresh_s3()
                     except Exception as e:
@@ -1130,7 +1219,7 @@ class DualPaneS3(tk.Tk):
                     return
                 def _del_pfx():
                     try:
-                        client = self._get_s3_client()
+                        client = self._get_s3_client("browse")
                         paginator = client.get_paginator("list_objects_v2")
                         to_delete = []
                         for page in paginator.paginate(Bucket=bucket, Prefix=sel):
