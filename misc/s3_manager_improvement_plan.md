@@ -29,7 +29,7 @@ This document contains structured suggestions for improving Tkinter + boto3 S3 M
 - Replace print statements with Python logging.
 - Log viewer inside the UI.
 
-### 6. Use Mulitple Roles
+### [X] 6. Use Mulitple Roles
 - Use Role A for browser [short session]
 - Use Role B for transfer [long session]
 

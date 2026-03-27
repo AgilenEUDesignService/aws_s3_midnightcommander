@@ -645,52 +645,9 @@ class DualPaneS3(tk.Tk):
                     return
                 role_name = dlg2.result
 
-                usage = tk.StringVar(value="browse")
+                usage = self._sso_ask_role_usage(role_name)
 
-                dlg3 = tk.Toplevel(self)
-                dlg3.title("Role Usage")
-                dlg3.transient(self)
-                dlg3.grab_set()
-                dlg3.resizable(False, False)
-
-                frm = ttk.Frame(dlg3, padding=12)
-                frm.pack(fill="both",expand=True)
-
-                ttk.Label(
-                        frm,
-                        text=f"How should the role '{role_name}' be used?",
-                        wraplength=360).pack(anchor="w")
-                ttk.Radiobutton(
-                        frm,
-                        text="Browse (list buckets, prefixes, objects)",
-                        variable=usage,
-                        value="browse"
-                        ).pack(anchor="w")
-
-                ttk.Radiobutton(
-                        frm,
-                        text="Transfer (upload / download with full object keys)",
-                        variable=usage,
-                        value="transfer"
-                        ).pack(anchor="w")
-
-                btns = ttk.Frame(frm)
-                btns.pack(fill="x")
-
-                def _ok():
-                    dlg3.destroy()
-
-                def _cancel():
-                    usage.set("")
-                    dlg3.destroy()
-
-                ttk.Button(btns, text="OK", command=_ok).pack(side="right")
-                ttk.Button(btns, text="Cancel", command=_cancel).pack(side="right",padx=(0,6))
-
-                self.wait_window(dlg3)
-
-                usage = usage.get()
-                if not usage:
+                if not usage in ["browse","transfer"]:
                     self.set_status("SSO cancelled.")
                     return
 
@@ -758,6 +715,69 @@ class DualPaneS3(tk.Tk):
             return None
 
         return sess.client(service_name)
+
+    def _sso_ask_role_usage(self, role_name):
+        """
+        Ask whether the selected role shuold be used for browsing or transfers.
+        MUST run on the Tk main thread.
+        """
+        result = {"usage": None}
+        done = threading.Event()
+
+        def _show():
+            usage = tk.StringVar(value="browse")
+
+            dlg = tk.Toplevel(self)
+            dlg.title("Role Usage")
+            dlg.transient(self)
+            dlg.grab_set()
+            dlg.resizable(False, False)
+
+            frm = ttk.Frame(dlg, padding=12)
+            frm.pack(fill="both", expand=True)
+
+            ttk.Label(
+                    frm,
+                    text=f"How should the role '{role_name}' be used?",
+                    wraplength=360
+                    ).pack(anchor="w", pady=(0,10))
+
+            ttk.Radiobutton(
+                    frm,
+                    text="Browse (list buckets, prefixes, objects)",
+                    variable=usage,
+                    value="browse"
+                    ).pack(anchor="w")
+
+            ttk.Radiobutton(
+                    frm,
+                    text="Transfer (upload / download with full object keys)",
+                    variable=usage,
+                    value="transfer"
+                    ).pack(anchor="w",pady=(4,10))
+
+            btns = ttk.Frame(frm)
+            btns.pack(fill="x")
+
+            def _ok():
+                result["usage"] = usage.get()
+                dlg.destroy()
+                done.set()
+
+            def _cancel():
+                result["usage"]= None
+                dlg.destro()
+                done.set()
+
+            ttk.Button(btns,text="OK",command=_ok).pack(side="right")
+            ttk.Button(btns,text="Cancer",command=_cancel).pack(side="right", padx=(0,6))
+
+        #Ensure UI code runs on TK main thread
+        self.after(0, _show)
+
+        # Wait safely in background thread
+        done.wait()
+        return result["usage"]
 
 
     def _get_s3_client(self,purpose="browse"):
@@ -911,6 +931,7 @@ class DualPaneS3(tk.Tk):
                         total += 1
                     for obj in page.get("Contents", []):
                         key = obj["Key"]
+                        if key == prefix: continue # skip showing the prefix
                         if hideprefix:
                             disp=key[len(prefix):]
                         else:
@@ -981,9 +1002,11 @@ class DualPaneS3(tk.Tk):
                     self.set_status("Uploading folder…")
                     client = self._get_s3_client("transfer")
                     for root, dirs, files in os.walk(local_path):
+                        base_dir = os.path.dirname(local_path.rstrip(os.path.sep))
+                        top_folder=os.path.basename(local_path.rstrip(os.path.sep))
                         for f in files:
                             full = os.path.join(root, f)
-                            rel = os.path.relpath(full, local_path).replace("\\","/")
+                            rel = os.path.relpath(full, base_dir).replace("\\","/")
                             key = (target + rel) if target.endswith("/") else (target + "/" + rel if target else rel)
                             extra_args={}
                             if self.checksum_algo:
@@ -1080,8 +1103,8 @@ class DualPaneS3(tk.Tk):
                 try:
                     self.set_status(f"Downloading s3://{bucket}/{prefix} → {local_dir}")
                     #client = self._get_s3_client()
-                    browse_client=self.get_s3_client("browse")
-                    transfer_client=self.get_s3_client("transfer")
+                    browse_client=self._get_s3_client("browse")
+                    transfer_client=self._get_s3_client("transfer")
                     paginator = browse_client.get_paginator("list_objects_v2")
                     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
                         for obj in page.get("Contents", []):
