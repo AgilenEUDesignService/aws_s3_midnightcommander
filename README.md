@@ -38,3 +38,4 @@ python3 mc_s3.py
 
 ## Binaries
 - A Windows Exe file is generated if you fail to install from command line. Available in dis folder. 
+   python -m PyInstaller --icon=.\imgs\Logo.ico --windowed  --onefile .\mc_s3.py
