@@ -120,8 +120,8 @@ class DualPaneS3(tk.Tk):
 
         # SSO runtime state
         # Seperate roles:
-        # - browse -> short-lived (list / navigate)
-        # - transfer -> long-lived (upload / download)
+        # - browse -> short-lived (list / navigate / download)
+        # - transfer -> long-lived (upload)
         self._sso_state = {
                 "browse":None,
                 "transfer": None
@@ -751,7 +751,7 @@ class DualPaneS3(tk.Tk):
 
             ttk.Radiobutton(
                     frm,
-                    text="Transfer (upload / download with full object keys)",
+                    text="Transfer (upload with full object keys)",
                     variable=usage,
                     value="transfer"
                     ).pack(anchor="w",pady=(4,10))
@@ -1128,7 +1128,7 @@ class DualPaneS3(tk.Tk):
                                 obj_size_bytes =obj_head["ContentLength"]
 
                                 callback = self.transfer_manager.create_callback(os.path.basename(key),obj_size_bytes)
-                                transfer_client.download_file(bucket, key, dest,Config=self.transfer_config, Callback=callback) #download files skip directories
+                                browse_client.download_file(bucket, key, dest,Config=self.transfer_config, Callback=callback) #download files skip directories
                                 self.transfer_manager.mark_done(callback.transfer_id)
                     self.set_status("Download complete.")
                     self.refresh_local()
@@ -1160,7 +1160,7 @@ class DualPaneS3(tk.Tk):
                     obj_size_bytes = obj["ContentLength"]
 
                     callback=self.transfer_manager.create_callback(os.path.basename(key),obj_size_bytes)
-                    transfer_client.download_file(bucket, key, save_as, Config=self.transfer_config, Callback=callback)
+                    browse_client.download_file(bucket, key, save_as, Config=self.transfer_config, Callback=callback)
                     self.transfer_manager.mark_done(callback.transfer_id)
                     self.set_status("Download complete.")
                     self.refresh_local()
