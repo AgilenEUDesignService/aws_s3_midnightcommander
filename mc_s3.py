@@ -14,6 +14,11 @@ from boto3.s3.transfer import TransferConfig # parallel downloads
 from libs.transfer_manager_addon import TransferManager
 from libs.config_manager_addon import ConfigManager
 
+from tkinter import messagebox
+from libs.clipboard_utils import copy_json_to_clipboard
+
+
+
 # ---------- AWS session helper ----------
 def make_session(profile_name=None, region_name=None):
     if profile_name:
@@ -141,6 +146,8 @@ class DualPaneS3(tk.Tk):
 
 
         self._build_ui()
+        self._build_s3_context_menu()
+        self.s3_tree.bind("<Button-3>",self.on_s3_right_click)
         self._bind_keys()
         self.transfer_manager = TransferManager(self)
 
@@ -405,7 +412,70 @@ class DualPaneS3(tk.Tk):
 
         ttk.Button(frm, text="Close", command=win.destroy).grid(row=10, column=1, sticky="e", pady=12)
 
+    # ------- S3 Selection Helpers -------------
 
+    def get_selected_s3_cwl_files(self):
+        """
+        Return selected S3 objects as CWL File Dicts
+        """
+        results=[]
+        bucket = (self.bucket_var.get() or "").strip()
+        prefix = (self.prefix_var.get() or "").strip()
+
+        if not bucket:
+            return results
+        #normalize prefix
+        if prefix and not prefix.endswith("/"):
+            prefix+="/"
+        for item_id in self.s3_tree.selection():
+            if item_id.endswith("/"): #skip directories
+                continue #remove
+            # contruct full s3 key
+            key_name=item_id[3:]
+            full_key=f"{prefix}{key_name}" if prefix else key_name
+            results.append({
+                "class":"File",
+                "location": f"s3://{bucket}/{full_key}"
+                })
+        return results
+
+    def copy_selection_as_cwl(self):
+        files=self.get_selected_s3_cwl_files()
+        if not files:
+            messagebox.showwarning(
+                "No selection",
+                "No S3 files selected"
+                )
+            return
+        # Single file -> File, multiple -> File[]
+        payload= files[0] if len(files)==1 else files
+        copy_json_to_clipboard(self,payload)
+        messagebox.showinfo(
+            "Copied",
+            "CWL File JSON copied to clipboard"
+            )
+    # S3 context menu
+    def _build_s3_context_menu(self):
+        self.s3_menu = tk.Menu(self,tearoff=0)
+
+        self.s3_menu.add_command(
+            label="Copy as CWL File / Files[]",
+            command=self.copy_selection_as_cwl
+            )
+
+    def on_s3_right_click(self,event):
+        """
+        Show s3 context menu on right-click.
+        """
+
+        try:
+            # Select item under cursor (important UX detail)
+            row=self.s3_tree.identify_row(event.y)
+            if row:
+                self.s3_tree.selection_set(row)
+            self.s3_menu.tk_popup(event.x_root,event.y_root)
+        finally:
+            self.s3_menu.grab_release()
 
     # ---------- Helpers ----------
     def _detect_profiles(self):
