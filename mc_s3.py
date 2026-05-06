@@ -162,6 +162,7 @@ class DualPaneS3(tk.Tk):
         self.sso_region_var.set(self.config.get("sso_region"))
         self.recursive_var.set(self.config.get("recursive",False))
         self.hide_s3_tree_prefix_var.set(self.config.get("hide_s3_tree_prefix",True))
+        self.s3_multiselect_var.set(self.config.get("s3_multiselect",False))
         
         # Restore window geometry
         geom = self.config.get("geometry")
@@ -241,6 +242,8 @@ class DualPaneS3(tk.Tk):
         self.hide_s3_tree_prefix_var.trace_add("write", lambda *a:
                                            self.config.set("hide_s3_tree_prefix",self.hide_s3_tree_prefix_var.get()))
 
+        self.s3_multiselect_var=tk.BooleanVar(value=False)
+
         #ttk.Label(toolbar, text="AWS Profile:").pack(side=tk.LEFT, padx=(0,4))
         self.profile_cb = ttk.Combobox(toolbar, textvariable=self.profile_var, width=16)
         self.profile_cb["values"] = self._detect_profiles()
@@ -279,6 +282,8 @@ class DualPaneS3(tk.Tk):
         ttk.Checkbutton(toolbar, text="S3 Recursive", variable=self.recursive_var).pack(side=tk.LEFT)
         # S3 Hide Tree Prefix
         ttk.Checkbutton(toolbar, text="S3 Hide Prefix", variable=self.hide_s3_tree_prefix_var).pack(side=tk.LEFT)
+        #S3 multiselect
+        ttk.Checkbutton(toolbar,text="Multi-select S3", variable=self.s3_multiselect_var,command=self._on_s3_multiselect_toggle).pack(side=tk.LEFT,padx=6)
 
         # ========== MENU BAR =============
         # Add the menubar later on currently a button on the right is sufficient
@@ -592,6 +597,20 @@ class DualPaneS3(tk.Tk):
             pass
 
         self.destroy()
+
+    def _on_s3_multiselect_toggle(self):
+        if self.s3_multiselect_var.get():
+            #Enable multiple-selection
+            self.s3_tree.config(selectmode="extended")
+        else:
+            #Disable multiple-selection
+            self.s3_tree.config(selectmode="browse")
+
+            #clean up: keep only one selected item
+            sel=self.s3_tree.selection()
+            if len(sel) > 1:
+                self.s3_tree.selection_set(sel[0])
+
 
 
 
@@ -1157,6 +1176,14 @@ class DualPaneS3(tk.Tk):
 
 
     def download_from_s3(self):
+        # Temporary guad: multi-download not supported yet
+        if self.s3_multiselect_var.get():
+            messagebox.showinfo(
+                    "Download not supported",
+                    "Downloading multiple S3 items in not supported yet.\n\n"
+                    "Please disable 'Multi-select' to download a single file or prefix."
+                    )
+            return
         typ, sel = self.get_selected_s3()
         if not sel:
             messagebox.showinfo("Download", "Select an S3 object or prefix to download.")
